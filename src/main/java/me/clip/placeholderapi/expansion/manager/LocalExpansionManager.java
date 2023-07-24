@@ -22,33 +22,11 @@ package me.clip.placeholderapi.expansion.manager;
 
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Sets;
-import java.io.File;
-import java.lang.reflect.Modifier;
-import java.util.Arrays;
-import java.util.Collection;
-import java.util.Collections;
-import java.util.List;
-import java.util.Locale;
-import java.util.Map;
-import java.util.Objects;
-import java.util.Optional;
-import java.util.Set;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.CompletionException;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.locks.ReentrantLock;
-import java.util.stream.Collectors;
 import me.clip.placeholderapi.PlaceholderAPIPlugin;
 import me.clip.placeholderapi.events.ExpansionRegisterEvent;
 import me.clip.placeholderapi.events.ExpansionUnregisterEvent;
 import me.clip.placeholderapi.events.ExpansionsLoadedEvent;
-import me.clip.placeholderapi.expansion.Cacheable;
-import me.clip.placeholderapi.expansion.Cleanable;
-import me.clip.placeholderapi.expansion.Configurable;
-import me.clip.placeholderapi.expansion.PlaceholderExpansion;
-import me.clip.placeholderapi.expansion.Taskable;
-import me.clip.placeholderapi.expansion.VersionSpecific;
-import me.clip.placeholderapi.expansion.cloud.CloudExpansion;
+import me.clip.placeholderapi.expansion.*;
 import me.clip.placeholderapi.util.FileUtil;
 import me.clip.placeholderapi.util.Futures;
 import me.clip.placeholderapi.util.Msg;
@@ -65,6 +43,15 @@ import org.jetbrains.annotations.ApiStatus;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 import org.jetbrains.annotations.Unmodifiable;
+
+import java.io.File;
+import java.lang.reflect.Modifier;
+import java.util.*;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionException;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.locks.ReentrantLock;
+import java.util.stream.Collectors;
 
 public final class LocalExpansionManager implements Listener {
 
@@ -305,16 +292,6 @@ public final class LocalExpansionManager implements Listener {
       ((Taskable) expansion).start();
     }
 
-    // Check eCloud for updates only if the expansion is external
-    if (plugin.getPlaceholderAPIConfig().isCloudEnabled() && expansion.getExpansionType() == PlaceholderExpansion.Type.EXTERNAL) {
-      final Optional<CloudExpansion> cloudExpansionOptional = plugin.getCloudExpansionManager().findCloudExpansionByName(identifier);
-      if (cloudExpansionOptional.isPresent()) {
-        CloudExpansion cloudExpansion = cloudExpansionOptional.get();
-        cloudExpansion.setHasExpansion(true);
-        cloudExpansion.setShouldUpdate(!cloudExpansion.getLatestVersion().equals(expansion.getVersion()));
-      }
-    }
-
     return true;
   }
 
@@ -338,14 +315,6 @@ public final class LocalExpansionManager implements Listener {
       ((Cacheable) expansion).clear();
     }
 
-    if (plugin.getPlaceholderAPIConfig().isCloudEnabled()) {
-      plugin.getCloudExpansionManager().findCloudExpansionByName(expansion.getName())
-          .ifPresent(cloud -> {
-            cloud.setHasExpansion(false);
-            cloud.setShouldUpdate(false);
-          });
-    }
-
     return true;
   }
 
@@ -365,25 +334,10 @@ public final class LocalExpansionManager implements Listener {
           .map(Optional::get)
           .collect(Collectors.toList());
 
-      final long needsUpdate = registered.stream()
-          .map(expansion -> plugin.getCloudExpansionManager().findCloudExpansionByName(expansion.getName()).orElse(null))
-          .filter(Objects::nonNull)
-          .filter(CloudExpansion::shouldUpdate)
-          .count();
-
       StringBuilder message = new StringBuilder(registered.size() == 0 ? "&6" : "&a")
           .append(registered.size())
           .append(' ')
           .append("placeholder hook(s) registered!");
-      
-      if (needsUpdate > 0) {
-        message.append(' ')
-            .append("&6")
-            .append(needsUpdate)
-            .append(' ')
-            .append("placeholder hook(s) have an update available.");
-      }
-      
       
       Msg.msg(sender, message.toString());
 

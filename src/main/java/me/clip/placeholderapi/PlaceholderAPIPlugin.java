@@ -20,28 +20,16 @@
 
 package me.clip.placeholderapi;
 
-import java.text.SimpleDateFormat;
-import java.util.HashMap;
-import java.util.Map;
-import me.clip.placeholderapi.commands.PlaceholderCommandRouter;
-import me.clip.placeholderapi.configuration.PlaceholderAPIConfig;
-import me.clip.placeholderapi.expansion.PlaceholderExpansion;
 import me.clip.placeholderapi.expansion.Version;
-import me.clip.placeholderapi.expansion.manager.CloudExpansionManager;
 import me.clip.placeholderapi.expansion.manager.LocalExpansionManager;
 import me.clip.placeholderapi.listeners.ServerLoadEventListener;
-import me.clip.placeholderapi.updatechecker.UpdateChecker;
-import me.clip.placeholderapi.util.Msg;
-import net.kyori.adventure.platform.bukkit.BukkitAudiences;
-import org.bstats.bukkit.Metrics;
-import org.bstats.charts.AdvancedPie;
-import org.bstats.charts.SimplePie;
 import org.bukkit.Bukkit;
 import org.bukkit.command.CommandSender;
-import org.bukkit.command.PluginCommand;
 import org.bukkit.event.HandlerList;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.jetbrains.annotations.NotNull;
+
+import java.text.SimpleDateFormat;
 
 /**
  * Yes I have a shit load of work to do...
@@ -69,14 +57,7 @@ public final class PlaceholderAPIPlugin extends JavaPlugin {
   }
 
   @NotNull
-  private final PlaceholderAPIConfig config = new PlaceholderAPIConfig(this);
-
-  @NotNull
   private final LocalExpansionManager localExpansionManager = new LocalExpansionManager(this);
-  @NotNull
-  private final CloudExpansionManager cloudExpansionManager = new CloudExpansionManager(this);
-
-  private BukkitAudiences adventure;
 
   /**
    * Gets the static instance of the main class for PlaceholderAPI. This class is not the actual API
@@ -97,7 +78,7 @@ public final class PlaceholderAPIPlugin extends JavaPlugin {
    */
   @NotNull
   public static String booleanTrue() {
-    return getInstance().getPlaceholderAPIConfig().booleanTrue();
+    return "yes";
   }
 
   /**
@@ -107,7 +88,7 @@ public final class PlaceholderAPIPlugin extends JavaPlugin {
    */
   @NotNull
   public static String booleanFalse() {
-    return getInstance().getPlaceholderAPIConfig().booleanFalse();
+    return "no";
   }
 
   /**
@@ -118,13 +99,7 @@ public final class PlaceholderAPIPlugin extends JavaPlugin {
    */
   @NotNull
   public static SimpleDateFormat getDateFormat() {
-    try {
-      return new SimpleDateFormat(getInstance().getPlaceholderAPIConfig().dateFormat());
-    } catch (final IllegalArgumentException ex) {
-      Msg.warn("Configured date format ('%s') is invalid! Defaulting to 'MM/dd/yy HH:mm:ss'",
-          ex, getInstance().getPlaceholderAPIConfig().dateFormat());
-      return new SimpleDateFormat("MM/dd/yy HH:mm:ss");
-    }
+    return new SimpleDateFormat("MM/dd/yy HH:mm:ss");
   }
 
   public static Version getServerVersion() {
@@ -140,32 +115,16 @@ public final class PlaceholderAPIPlugin extends JavaPlugin {
 
   @Override
   public void onEnable() {
-    setupCommand();
-    setupMetrics();
     setupExpansions();
-
-    adventure = BukkitAudiences.create(this);
-
-    if (config.isCloudEnabled()) {
-      getCloudExpansionManager().load();
-    }
-
-    if (config.checkUpdates()) {
-      new UpdateChecker(this).fetch();
-    }
   }
 
   @Override
   public void onDisable() {
-    getCloudExpansionManager().kill();
     getLocalExpansionManager().kill();
 
     HandlerList.unregisterAll(this);
 
     Bukkit.getScheduler().cancelTasks(this);
-
-    adventure.close();
-    adventure = null;
 
     instance = null;
   }
@@ -176,71 +135,11 @@ public final class PlaceholderAPIPlugin extends JavaPlugin {
     reloadConfig();
 
     getLocalExpansionManager().load(sender);
-
-    if (config.isCloudEnabled()) {
-      getCloudExpansionManager().load();
-    } else {
-      getCloudExpansionManager().kill();
-    }
   }
 
   @NotNull
   public LocalExpansionManager getLocalExpansionManager() {
     return localExpansionManager;
-  }
-
-  @NotNull
-  public CloudExpansionManager getCloudExpansionManager() {
-    return cloudExpansionManager;
-  }
-
-  @NotNull
-  public BukkitAudiences getAdventure() {
-    if(adventure == null) {
-      throw new IllegalStateException("Tried to access Adventure when the plugin was disabled!");
-    }
-
-    return adventure;
-  }
-
-  /**
-   * Obtain the configuration class for PlaceholderAPI.
-   *
-   * @return PlaceholderAPIConfig instance
-   */
-  @NotNull
-  public PlaceholderAPIConfig getPlaceholderAPIConfig() {
-    return config;
-  }
-
-  private void setupCommand() {
-    final PluginCommand pluginCommand = getCommand("placeholderapi");
-    if (pluginCommand == null) {
-      return;
-    }
-
-    final PlaceholderCommandRouter router = new PlaceholderCommandRouter(this);
-    pluginCommand.setExecutor(router);
-    pluginCommand.setTabCompleter(router);
-  }
-
-  private void setupMetrics() {
-    final Metrics metrics = new Metrics(this, 438);
-    metrics.addCustomChart(new SimplePie("using_expansion_cloud",
-        () -> getPlaceholderAPIConfig().isCloudEnabled() ? "yes" : "no"));
-
-    metrics.addCustomChart(new SimplePie("using_spigot", () -> getServerVersion().isSpigot() ? "yes" : "no"));
-
-    metrics.addCustomChart(new AdvancedPie("expansions_used", () -> {
-      final Map<String, Integer> values = new HashMap<>();
-
-      for (final PlaceholderExpansion expansion : getLocalExpansionManager().getExpansions()) {
-        values.put(expansion.getRequiredPlugin() == null ? expansion.getIdentifier()
-            : expansion.getRequiredPlugin(), 1);
-      }
-
-      return values;
-    }));
   }
 
   private void setupExpansions() {
